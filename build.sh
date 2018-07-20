@@ -66,18 +66,18 @@ export KBUILD_BUILD_USER="Faraz"
 export KBUILD_BUILD_HOST="TimeMachine"
 export USE_CCACHE=1
 BUILD_DIR=$KERNEL_DIR/build
-VERSION="X9.3-EiD-Special"
+VERSION="X10"
 DATE=$(date -u +%Y%m%d-%H%M)
-ZIP_NAME=Nichrome-$DEVICE-$VERSION-$DATE
+ZIP_NAME=ODonor's-$DEVICE-$VERSION-$DATE
 
 compile_kernel ()
 {
 echo -e "$cyan****************************************************"
-echo "             Compiling Nichrome kernel        "
+echo "             Compiling ODonor's kernel        "
 echo -e "****************************************************"
 echo -e "$nocol"
 rm -f $KERN_IMG
-make nichrome_defconfig
+make odonors_defconfig
 make $J
 echo "$cyan Making dt.img"
 echo -e "$nocol"
