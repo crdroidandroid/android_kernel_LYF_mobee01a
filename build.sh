@@ -54,7 +54,7 @@ if [[ -d ${Toolchain} ]]; then
 		rm -rf ${Toolchain}
 	fi
 else
-	git clone https://github.com/LS-5015-G42-Dev-Team/aarch64-linux-android.git -b ${TOOL_VER} $Toolchain
+	git clone --depth=1 https://github.com/TeamODonors/toolchain -b ${TOOL_VER} $Toolchain
 fi
 }
 
@@ -68,7 +68,7 @@ export USE_CCACHE=1
 BUILD_DIR=$KERNEL_DIR/build
 VERSION="X10"
 DATE=$(date -u +%Y%m%d-%H%M)
-ZIP_NAME=ODonor's-$DEVICE-$VERSION-$DATE
+ZIP_NAME="ODonor's"-$DEVICE-$VERSION-$DATE
 
 compile_kernel ()
 {
