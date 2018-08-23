@@ -36,7 +36,7 @@
 
 /*
  * Targeted preemption latency for CPU-bound tasks:
- * (default: 6ms * (1 + ilog(ncpus)), units: nanoseconds)
+ * (default: 2ms * (1 + ilog(ncpus)), units: nanoseconds)
  *
  * NOTE: this latency value is not the same as the concept of
  * 'timeslice length' - timeslices in CFS are of variable length
@@ -46,8 +46,13 @@
  * (to see the precise effective timeslice length of your workload,
  *  run vmstat and monitor the context-switches (cs) field)
  */
-unsigned int sysctl_sched_latency = 6000000ULL;
-unsigned int normalized_sysctl_sched_latency = 6000000ULL;
+#ifdef CONFIG_ZEN_INTERACTIVE
+unsigned int sysctl_sched_latency = 3000000ULL;
+unsigned int normalized_sysctl_sched_latency = 3000000ULL;
+#else
+unsigned int sysctl_sched_latency = 2000000ULL;
+unsigned int normalized_sysctl_sched_latency = 2000000ULL;
+#endif
 
 /*
  * The initial- and re-scaling of tunables is configurable
@@ -63,15 +68,24 @@ enum sched_tunable_scaling sysctl_sched_tunable_scaling
 
 /*
  * Minimal preemption granularity for CPU-bound tasks:
- * (default: 0.75 msec * (1 + ilog(ncpus)), units: nanoseconds)
+ * (default: 1 msec * (1 + ilog(ncpus)), units: nanoseconds)
  */
-unsigned int sysctl_sched_min_granularity = 750000ULL;
-unsigned int normalized_sysctl_sched_min_granularity = 750000ULL;
+#ifdef CONFIG_ZEN_INTERACTIVE
+unsigned int sysctl_sched_min_granularity = 300000ULL;
+unsigned int normalized_sysctl_sched_min_granularity = 300000ULL;
+#else
+unsigned int sysctl_sched_min_granularity = 1000000ULL;
+unsigned int normalized_sysctl_sched_min_granularity = 1000000ULL;
+#endif
 
 /*
  * is kept at sysctl_sched_latency / sysctl_sched_min_granularity
  */
-static unsigned int sched_nr_latency = 8;
+#ifdef CONFIG_ZEN_INTERACTIVE
+static unsigned int sched_nr_latency = 10;
+#else
+static unsigned int sched_nr_latency = 2;
+#endif
 
 /*
  * After fork, child runs first. If set to 0 (default) then
@@ -95,10 +109,17 @@ unsigned int __read_mostly sysctl_sched_wake_to_idle;
  * and reduces their over-scheduling. Synchronous workloads will still
  * have immediate wakeup/sleep latencies.
  */
+#ifdef CONFIG_ZEN_INTERACTIVE
+unsigned int sysctl_sched_wakeup_granularity = 500000UL;
+unsigned int normalized_sysctl_sched_wakeup_granularity = 500000UL;
+
+const_debug unsigned int sysctl_sched_migration_cost = 250000UL;
+#else
 unsigned int sysctl_sched_wakeup_granularity = 1000000UL;
 unsigned int normalized_sysctl_sched_wakeup_granularity = 1000000UL;
 
 const_debug unsigned int sysctl_sched_migration_cost = 500000UL;
+#endif
 
 /*
  * The exponential sliding  window over which load is averaged for shares
@@ -116,9 +137,13 @@ unsigned int __read_mostly sysctl_sched_shares_window = 10000000UL;
  * to consumption or the quota being specified to be smaller than the slice)
  * we will always only issue the remaining available time.
  *
- * default: 5 msec, units: microseconds
+ * default: 2 msec, units: microseconds
   */
-unsigned int sysctl_sched_cfs_bandwidth_slice = 5000UL;
+#ifdef CONFIG_ZEN_INTERACTIVE
+unsigned int sysctl_sched_cfs_bandwidth_slice = 3000UL;
+#else
+unsigned int sysctl_sched_cfs_bandwidth_slice = 2000UL;
+#endif
 #endif
 
 /*
@@ -1246,7 +1271,7 @@ unsigned int max_task_load(void)
 }
 
 /* Use this knob to turn on or off HMP-aware task placement logic */
-unsigned int __read_mostly sched_enable_hmp = 0;
+unsigned int __read_mostly sched_enable_hmp = 1;
 
 /* A cpu can no longer accomodate more tasks if:
  *
@@ -1267,7 +1292,7 @@ unsigned int __read_mostly sysctl_sched_mostly_idle_nr_run = 3;
  * Control whether or not individual CPU power consumption is used to
  * guide task placement.
  */
-unsigned int __read_mostly sched_enable_power_aware = 0;
+unsigned int __read_mostly sched_enable_power_aware = 1;
 
 /*
  * This specifies the maximum percent power difference between 2
@@ -1300,7 +1325,7 @@ unsigned int __read_mostly sysctl_sched_spill_load_pct = 100;
  * sched_small_task are considered as small tasks.
  */
 unsigned int __read_mostly sched_small_task;
-unsigned int __read_mostly sysctl_sched_small_task_pct = 10;
+unsigned int __read_mostly sysctl_sched_small_task_pct = 65;
 
 /*
  * Tasks with demand >= sched_heavy_task will have their
@@ -1321,7 +1346,7 @@ unsigned int __read_mostly sched_heavy_task;
  * capacity.
  */
 unsigned int __read_mostly sched_upmigrate;
-unsigned int __read_mostly sysctl_sched_upmigrate_pct = 80;
+unsigned int __read_mostly sysctl_sched_upmigrate_pct = 95;
 
 /*
  * Big tasks, once migrated, will need to drop their bandwidth
@@ -1329,14 +1354,14 @@ unsigned int __read_mostly sysctl_sched_upmigrate_pct = 80;
  * migrated.
  */
 unsigned int __read_mostly sched_downmigrate;
-unsigned int __read_mostly sysctl_sched_downmigrate_pct = 60;
+unsigned int __read_mostly sysctl_sched_downmigrate_pct = 80;
 
 /*
  * Tasks whose nice value is > sysctl_sched_upmigrate_min_nice are never
  * considered as "big" tasks.
  */
-static int __read_mostly sched_upmigrate_min_nice = 15;
-int __read_mostly sysctl_sched_upmigrate_min_nice = 15;
+static int __read_mostly sched_upmigrate_min_nice = 9;
+int __read_mostly sysctl_sched_upmigrate_min_nice = 9;
 
 /*
  * Tunable to govern scheduler wakeup placement CPU selection
@@ -2481,7 +2506,7 @@ static inline int nr_big_tasks(struct rq *rq)
 
 #else	/* CONFIG_SCHED_HMP */
 
-#define sched_enable_power_aware 0
+#define sched_enable_power_aware 1
 
 static inline int select_best_cpu(struct task_struct *p, int target, int reason)
 {
@@ -3946,7 +3971,7 @@ static int runtime_refresh_within(struct cfs_bandwidth *cfs_b, u64 min_expire)
 	u64 remaining;
 
 	/* if the call-back is running a quota refresh is already occurring */
-	if (hrtimer_callback_running(refresh_timer))
+	if (hrtimer_callback_running_relaxed(refresh_timer))
 		return 1;
 
 	/* is a quota refresh about to occur? */
@@ -4478,6 +4503,23 @@ static unsigned long cpu_avg_load_per_task(int cpu)
 	return 0;
 }
 
+static void record_wakee(struct task_struct *p)
+{
+	/*
+	 * Rough decay (wiping) for cost saving, don't worry
+	 * about the boundary, really active task won't care
+	 * about the loss.
+	 */
+	if (jiffies > current->wakee_flip_decay_ts + HZ) {
+		current->wakee_flips = 0;
+		current->wakee_flip_decay_ts = jiffies;
+	}
+
+	if (current->last_wakee != p) {
+		current->last_wakee = p;
+		current->wakee_flips++;
+	}
+}
 
 static void task_waking_fair(struct task_struct *p)
 {
@@ -4498,6 +4540,7 @@ static void task_waking_fair(struct task_struct *p)
 #endif
 
 	se->vruntime -= min_vruntime;
+	record_wakee(p);
 }
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -4616,6 +4659,28 @@ static inline unsigned long effective_load(struct task_group *tg, int cpu,
 
 #endif
 
+static int wake_wide(struct task_struct *p)
+{
+	int factor = this_cpu_read(sd_llc_size);
+
+	/*
+	 * Yeah, it's the switching-frequency, could means many wakee or
+	 * rapidly switch, use factor here will just help to automatically
+	 * adjust the loose-degree, so bigger node will lead to more pull.
+	 */
+	if (p->wakee_flips > factor) {
+		/*
+		 * wakee is somewhat hot, it needs certain amount of cpu
+		 * resource, so if waker is far more hot, prefer to leave
+		 * it alone.
+		 */
+		if (current->wakee_flips > (factor * p->wakee_flips))
+			return 1;
+	}
+
+	return 0;
+}
+
 static int wake_affine(struct sched_domain *sd, struct task_struct *p, int sync)
 {
 	s64 this_load, load;
@@ -4624,6 +4689,13 @@ static int wake_affine(struct sched_domain *sd, struct task_struct *p, int sync)
 	struct task_group *tg;
 	unsigned long weight;
 	int balanced;
+
+	/*
+	 * If we wake multiple tasks be careful to not bounce
+	 * ourselves around too much.
+	 */
+	if (wake_wide(p))
+		return 0;
 
 	idx	  = sd->wake_idx;
 	this_cpu  = smp_processor_id();

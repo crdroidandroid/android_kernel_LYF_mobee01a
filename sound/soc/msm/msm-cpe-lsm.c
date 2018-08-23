@@ -2393,3 +2393,4 @@ module_platform_driver(msm_cpe_lsm_driver);
 MODULE_DESCRIPTION("CPE LSM platform driver");
 MODULE_DEVICE_TABLE(of, msm_cpe_lsm_dt_match);
 MODULE_LICENSE("GPL v2");
+

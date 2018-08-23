@@ -2865,6 +2865,45 @@ static int mdp3_runtime_resume(struct device *dev)
 	return 0;
 }
 
+
+static int mdp3_runtime_idle(struct device *dev)
+{
+	dev_dbg(dev, "Display pm runtime idle\n");
+
+	return 0;
+}
+
+static int mdp3_runtime_suspend(struct device *dev)
+{
+	bool device_on = false;
+
+	dev_dbg(dev, "Display pm runtime suspend, active overlay cnt=%d\n",
+		atomic_read(&mdp3_res->active_intf_cnt));
+
+	if (mdp3_res->clk_ena) {
+		pr_debug("Clk turned on...MDP suspend failed\n");
+		return -EBUSY;
+	}
+
+	mdp3_footswitch_ctrl(0);
+
+	/* do not suspend panels when going in to idle power collapse */
+	if (!mdp3_res->idle_pc)
+		device_for_each_child(dev, &device_on, mdss_fb_suspres_panel);
+
+	return 0;
+}
+#endif
+
+static const struct dev_pm_ops mdp3_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(mdp3_pm_suspend,
+				mdp3_pm_resume)
+	SET_RUNTIME_PM_OPS(mdp3_runtime_suspend,
+				mdp3_runtime_resume,
+				mdp3_runtime_idle)
+};
+
+
 static int mdp3_runtime_idle(struct device *dev)
 {
 	dev_dbg(dev, "Display pm runtime idle\n");

@@ -5,6 +5,8 @@
  *
  *  Copyright (C) 1991-2002  Linus Torvalds
  *
+ *  Copyright (c) 2014, NVIDIA CORPORATION.  All rights reserved.
+ *
  *  1996-12-23  Modified by Dave Grothe to fix bugs in semaphores and
  *		make semaphores SMP safe
  *  1998-11-19	Implemented schedule_timeout() and related stuff
@@ -79,6 +81,7 @@
 #include <asm/tlb.h>
 #include <asm/irq_regs.h>
 #include <asm/mutex.h>
+#include <asm/relaxed.h>
 #ifdef CONFIG_PARAVIRT
 #include <asm/paravirt.h>
 #endif
@@ -152,22 +155,6 @@ const char *task_event_names[] = {"PUT_PREV_TASK", "PICK_NEXT_TASK",
 
 ATOMIC_NOTIFIER_HEAD(migration_notifier_head);
 ATOMIC_NOTIFIER_HEAD(load_alert_notifier_head);
-
-#ifdef smp_mb__before_atomic
-void __smp_mb__before_atomic(void)
-{
-	smp_mb__before_atomic();
-}
-EXPORT_SYMBOL(__smp_mb__before_atomic);
-#endif
-
-#ifdef smp_mb__after_atomic
-void __smp_mb__after_atomic(void)
-{
-	smp_mb__after_atomic();
-}
-EXPORT_SYMBOL(__smp_mb__after_atomic);
-#endif
 
 void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
 {
@@ -2751,9 +2738,10 @@ unsigned long wait_task_inactive(struct task_struct *p, long match_state)
 		 * is actually now running somewhere else!
 		 */
 		while (task_running(rq, p)) {
-			if (match_state && unlikely(p->state != match_state))
+			if (match_state && unlikely(cpu_relaxed_read_long
+				(&(p->state)) != match_state))
 				return 0;
-			cpu_relax();
+			cpu_read_relax();
 		}
 
 		/*
@@ -3079,7 +3067,7 @@ void scheduler_ipi(void)
 {
 	int cpu = smp_processor_id();
 
-	if (llist_empty(&this_rq()->wake_list)
+	if (llist_empty_relaxed(&this_rq()->wake_list)
 			&& !tick_nohz_full_cpu(cpu)
 			&& !got_nohz_idle_kick()
 			&& !got_boost_kick())
@@ -3248,8 +3236,8 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	 * If the owning (remote) cpu is still in the middle of schedule() with
 	 * this task as prev, wait until its done referencing the task.
 	 */
-	while (p->on_cpu)
-		cpu_relax();
+	while (cpu_relaxed_read(&(p->on_cpu)))
+		cpu_read_relax();
 	/*
 	 * Pairs with the smp_wmb() in finish_lock_switch().
 	 */
@@ -3912,6 +3900,67 @@ unsigned long this_cpu_load(void)
 	return this->cpu_load[0];
 }
 
+unsigned long avg_cpu_nr_running(unsigned int cpu)
+{
+	unsigned int seqcnt, ave_nr_running;
+
+	struct rq *q = cpu_rq(cpu);
+
+	/*
+	 * Update average to avoid reading stalled value if there were
+	 * no run-queue changes for a long time. On the other hand if
+	 * the changes are happening right now, just read current value
+	 * directly.
+	 */
+	seqcnt = read_seqcount_begin(&q->ave_seqcnt);
+	ave_nr_running = do_avg_nr_running(q);
+	if (read_seqcount_retry(&q->ave_seqcnt, seqcnt)) {
+		read_seqcount_begin(&q->ave_seqcnt);
+		ave_nr_running = q->ave_nr_running;
+	}
+	return ave_nr_running;
+}
+EXPORT_SYMBOL(avg_cpu_nr_running);
+
+unsigned long get_avg_nr_running(unsigned int cpu)
+{
+	struct rq *q;
+
+	if (cpu >= nr_cpu_ids)
+		return 0;
+
+	q = cpu_rq(cpu);
+
+	return q->ave_nr_running;
+}
+
+unsigned long avg_nr_running(void)
+{
+	unsigned long i, sum = 0;
+	unsigned int seqcnt, ave_nr_running;
+
+	for_each_online_cpu(i) {
+		struct rq *q = cpu_rq(i);
+
+		/*
+		 * Update average to avoid reading stalled value if there were
+		 * no run-queue changes for a long time. On the other hand if
+		 * the changes are happening right now, just read current value
+		 * directly.
+		 */
+		seqcnt = read_seqcount_begin(&q->ave_seqcnt);
+		ave_nr_running = do_avg_nr_running(q);
+		if (read_seqcount_retry(&q->ave_seqcnt, seqcnt)) {
+			read_seqcount_begin(&q->ave_seqcnt);
+			ave_nr_running = q->ave_nr_running;
+		}
+
+		sum += ave_nr_running;
+	}
+
+	return sum;
+}
+EXPORT_SYMBOL(avg_nr_running);
 
 /*
  * Global load-average calculations
@@ -4794,6 +4843,9 @@ pick_next_task(struct rq *rq)
 static void __sched __schedule(void)
 {
 	struct task_struct *prev, *next;
+#ifdef CONFIG_TASK_CPUFREQ_STATS
+	struct task_struct *parent;
+#endif
 	unsigned long *switch_count;
 	struct rq *rq;
 	int cpu;
@@ -4857,7 +4909,15 @@ need_resched:
 	wallclock = sched_clock();
 	update_task_ravg(prev, rq, PUT_PREV_TASK, wallclock, 0);
 	update_task_ravg(next, rq, PICK_NEXT_TASK, wallclock, 0);
-	clear_tsk_need_resched(prev);
+#ifdef CONFIG_TASK_CPUFREQ_STATS
+	parent = prev;
+	if (prev->pid != prev->tgid) {
+		parent = find_task_by_vpid(prev->tgid);
+	}
+	task_update_cumulative_time_in_state(prev, parent, cpu_of(rq));
+	task_update_time_in_state(next, cpu_of(rq));
+#endif
+        clear_tsk_need_resched(prev);
 	rq->skip_clock_update = 0;
 
 	BUG_ON(task_cpu(next) != cpu_of(rq));
@@ -5653,13 +5713,30 @@ int idle_cpu(int cpu)
 		return 0;
 
 #ifdef CONFIG_SMP
-	if (!llist_empty(&rq->wake_list))
+	if (!llist_empty_relaxed(&rq->wake_list))
 		return 0;
 #endif
 
 	return 1;
 }
 
+int idle_cpu_relaxed(int cpu)
+{
+	struct rq *rq = cpu_rq(cpu);
+
+	if ((struct task_struct *)cpu_relaxed_read_long(&rq->curr) != rq->idle)
+		return 0;
+
+	if (cpu_relaxed_read(&rq->nr_running))
+		return 0;
+
+#ifdef CONFIG_SMP
+	if (!llist_empty_relaxed(&rq->wake_list))
+		return 0;
+#endif
+
+	return 1;
+}
 /**
  * idle_task - return the idle task for a given cpu.
  * @cpu: the processor in question.
@@ -7757,18 +7834,23 @@ static void destroy_sched_domains(struct sched_domain *sd, int cpu)
  * two cpus are in the same cache domain, see cpus_share_cache().
  */
 DEFINE_PER_CPU(struct sched_domain *, sd_llc);
+DEFINE_PER_CPU(int, sd_llc_size);
 DEFINE_PER_CPU(int, sd_llc_id);
 
 static void update_top_cache_domain(int cpu)
 {
 	struct sched_domain *sd;
 	int id = cpu;
+	int size = 1;
 
 	sd = highest_flag_domain(cpu, SD_SHARE_PKG_RESOURCES);
-	if (sd)
+	if (sd) {
 		id = cpumask_first(sched_domain_span(sd));
+		size = cpumask_weight(sched_domain_span(sd));
+	}
 
 	rcu_assign_pointer(per_cpu(sd_llc, cpu), sd);
+	per_cpu(sd_llc_size, cpu) = size;
 	per_cpu(sd_llc_id, cpu) = id;
 }
 

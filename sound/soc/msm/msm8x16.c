@@ -1935,7 +1935,7 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	 * 210-290 == Button 2
 	 * 360-680 == Button 3
 	 */
-#ifdef CONFIG_TESTPLUS_ONLY    
+#ifdef CONFIG_TESTPLUS_ONLY
 	btn_low[0] = 100;
 	btn_high[0] = 100;
 	btn_low[1] = 101;
@@ -3079,7 +3079,6 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 static struct snd_soc_dai_link msm8x16_wcd_dai_links[
 				ARRAY_SIZE(msm8x16_dai) +
 				ARRAY_SIZE(msm8x16_wcd_dai)];
-
 
 static struct snd_soc_dai_link msm8x16_9326_dai_links[
 				ARRAY_SIZE(msm8x16_dai) +

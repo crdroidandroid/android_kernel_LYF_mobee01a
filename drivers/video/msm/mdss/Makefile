@@ -13,7 +13,7 @@ mdss-mdp-objs += mdss_mdp_rotator.o
 mdss-mdp-objs += mdss_mdp_overlay.o
 mdss-mdp-objs += mdss_mdp_splash_logo.o
 mdss-mdp-objs += mdss_mdp_wb.o
-obj-$(CONFIG_FB_MSM_MDSS) += mdss-mdp.o
+obj-$(CONFIG_FB_MSM_MDSS) += mdss-mdp.o lcd_notify.o
 obj-$(CONFIG_FB_MSM_MDSS) += mdss_mdp_debug.o
 
 ifeq ($(CONFIG_FB_MSM_MDSS),y)
@@ -52,3 +52,4 @@ obj-$(CONFIG_FB_MSM_MDSS) += mdss_fb.o mdss_util.o
 obj-$(CONFIG_COMPAT) += mdss_compat_utils.o
 
 obj-$(CONFIG_FB_MSM_MDSS) += mdss_livedisplay.o
+obj-$(CONFIG_FB_MSM_MDSS_KCAL_CTRL) += mdss_mdp_kcal_ctrl.o

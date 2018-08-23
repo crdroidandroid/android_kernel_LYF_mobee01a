@@ -21,9 +21,18 @@
 #include <linux/leds.h>
 #include <linux/qpnp/pwm.h>
 #include <linux/err.h>
+#include <linux/display_state.h>
 
 #include "mdss_dsi.h"
 #include "mdss_livedisplay.h"
+
+#ifdef CONFIG_POWERSUSPEND
+#include <linux/powersuspend.h>
+#endif
+
+#ifdef CONFIG_STATE_NOTIFIER
+#include <linux/state_notifier.h>
+#endif
 
 #define DT_CMD_HDR 6
 
@@ -35,6 +44,13 @@
 
 #define MIN_REFRESH_RATE 48
 #define DEFAULT_MDP_TRANSFER_TIME 14000
+
+bool display_on = true;
+
+bool is_display_on()
+{
+	return display_on;
+}
 
 #ifdef CONFIG_MACH_T86519A1
 #define TPS65132_GPIO_POS_EN 902
@@ -662,9 +678,15 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		return -EINVAL;
 	}
 
+	display_on = true;
+
 #ifdef CONFIG_MACH_T86519A1
 	gpio_set_value(TPS65132_GPIO_POS_EN, 1);
 	gpio_set_value(TPS65132_GPIO_NEG_EN, 1);
+#endif
+
+#ifdef CONFIG_POWERSUSPEND
+       set_power_suspend_state_panel_hook(POWER_SUSPEND_INACTIVE);
 #endif
 
 	pinfo = &pdata->panel_info;
@@ -672,6 +694,10 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 				panel_data);
 
 	pr_debug("%s: ctrl=%pK ndx=%d\n", __func__, ctrl, ctrl->ndx);
+
+	#ifdef CONFIG_STATE_NOTIFIER
+	       state_resume();
+	#endif
 
 	if (pinfo->dcs_cmd_by_left) {
 		if (ctrl->ndx != DSI_CTRL_LEFT)
@@ -733,6 +759,8 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 		return -EINVAL;
 	}
 
+	display_on = false;
+
 #ifdef CONFIG_MACH_T86519A1
 	gpio_set_value(TPS65132_GPIO_POS_EN, 0);
 	gpio_set_value(TPS65132_GPIO_NEG_EN, 0);
@@ -744,6 +772,10 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 
 	pr_debug("%s: ctrl=%pK ndx=%d\n", __func__, ctrl, ctrl->ndx);
 
+	#ifdef CONFIG_STATE_NOTIFIER
+	       state_suspend();
+	#endif
+
 	if (pinfo->dcs_cmd_by_left) {
 		if (ctrl->ndx != DSI_CTRL_LEFT)
 			goto end;
@@ -751,6 +783,10 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
+
+#ifdef CONFIG_POWERSUSPEND
+       set_power_suspend_state_panel_hook(POWER_SUSPEND_ACTIVE);
+#endif
 
 end:
 	pinfo->blank_state = MDSS_PANEL_BLANK_BLANK;
@@ -781,6 +817,11 @@ static int mdss_dsi_panel_low_power_config(struct mdss_panel_data *pdata,
 		pinfo->blank_state = MDSS_PANEL_BLANK_LOW_POWER;
 	else
 		pinfo->blank_state = MDSS_PANEL_BLANK_UNBLANK;
+
+        #ifdef CONFIG_STATE_NOTIFIER
+	if (enable)
+	   state_suspend();
+        #endif
 
 	pr_debug("%s:-\n", __func__);
 	return 0;

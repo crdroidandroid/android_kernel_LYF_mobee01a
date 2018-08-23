@@ -483,7 +483,6 @@ static void mdss_dsi_cfg_lane_ctrl(struct mdss_dsi_ctrl_pdata *ctrl,
 	MIPI_OUTP(ctrl->ctrl_base + 0x0ac, data);
 }
 
-
 static inline bool mdss_dsi_poll_clk_lane(struct mdss_dsi_ctrl_pdata *ctrl)
 {
 	u32 clk = 0;

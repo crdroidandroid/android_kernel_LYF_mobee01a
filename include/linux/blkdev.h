@@ -36,7 +36,11 @@ struct bsg_job;
 struct blkcg_gq;
 
 #define BLKDEV_MIN_RQ	4
+#ifdef CONFIG_ZEN_INTERACTIVE
+#define BLKDEV_MAX_RQ	16
+#else
 #define BLKDEV_MAX_RQ	128	/* Default maximum */
+#endif
 
 /*
  * Maximum number of blkcg policies allowed to be registered concurrently.
@@ -475,7 +479,7 @@ struct request_queue {
 #define QUEUE_FLAG_DEFAULT	((1 << QUEUE_FLAG_IO_STAT) |		\
 				 (1 << QUEUE_FLAG_STACKABLE)	|	\
 				 (1 << QUEUE_FLAG_SAME_COMP)	|	\
-				 (1 << QUEUE_FLAG_ADD_RANDOM))
+				 (0 << QUEUE_FLAG_ADD_RANDOM))
 
 static inline void queue_lockdep_assert_held(struct request_queue *q)
 {
