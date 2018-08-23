@@ -66,7 +66,7 @@ export KBUILD_BUILD_USER="Faraz"
 export KBUILD_BUILD_HOST="TimeMachine"
 export USE_CCACHE=1
 BUILD_DIR=$KERNEL_DIR/build
-VERSION="X10"
+VERSION="X11"
 DATE=$(date -u +%Y%m%d-%H%M)
 ZIP_NAME="ODonor's"-$DEVICE-$VERSION-$DATE
 
